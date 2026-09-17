@@ -1,0 +1,23 @@
+name: Publish
+
+# Tag a release to publish, e.g. `git tag v0.1.0 && git push --tags`.
+# Uses PyPI Trusted Publishing, so no API token is stored in the repo:
+# configure it once at https://pypi.org/manage/account/publishing/
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

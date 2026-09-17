@@ -81,21 +81,48 @@ downscaled, so coordinates read off one are *not* device coordinates.
 
 There is deliberately no arbitrary `adb shell` tool.
 
-## Install (local)
+## Install
+
+```bash
+pip install flutter-bridge-mcp
+```
+
+Or from a clone, to hack on it:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-This puts a `flutter-bridge-mcp` executable in `.venv/bin/`.
+Either way you get a `flutter-bridge-mcp` executable on the path (in `.venv/bin/`
+for the editable install). It needs Python 3.10+ and `adb` — from Android Studio's
+SDK, or `platform-tools`.
+
+## Tests
+
+The unit suite covers log parsing, error grouping and widget-tree flattening, and
+needs no device:
+
+```bash
+pip install -e ".[test]"
+python -m pytest
+```
+
+`selftest.py` is the other half — it exercises the real thing against an attached
+device:
+
+```bash
+python selftest.py --package com.example.app --project ~/StudioProjects/app
+```
+
+Without `--package` it checks the Android side only; `--project` adds hot reload.
 
 ## Use in Claude Code (including the Claude plugin in Android Studio)
 
 The Studio plugin reads the Claude Code CLI config, so registering it once covers both:
 
 ```bash
-claude mcp add flutter-bridge /abs/path/to/flutter-bridge-mcp/.venv/bin/flutter-bridge-mcp \
+claude mcp add flutter-bridge flutter-bridge-mcp \
   -e ADB_PATH=/abs/path/to/Android/Sdk/platform-tools/adb
 ```
 
@@ -109,7 +136,7 @@ Create `mcp.json` in the Studio config directory
 {
   "mcpServers": {
     "flutter-bridge": {
-      "command": "/abs/path/to/flutter-bridge-mcp/.venv/bin/flutter-bridge-mcp",
+      "command": "/abs/path/to/flutter-bridge-mcp",
       "args": [],
       "env": { "ADB_PATH": "/abs/path/to/Android/Sdk/platform-tools/adb" }
     }
@@ -125,8 +152,14 @@ Restart Studio, then in Gemini → **Agent** mode check the tools menu for `flut
 | --- | --- | --- |
 | `ADB_PATH` | `adb` on PATH | adb binary |
 | `ANDROID_SERIAL` | — | Default device when several are attached |
-| `LOGCAT_MCP_MAX_LINES` | 200 | Hard cap on returned lines |
-| `LOGCAT_MCP_MAX_MSG` | 400 | Per-message truncation |
-| `LOGCAT_MCP_SCAN_LINES` | 8000 | Lines pulled from logcat before filtering |
-| `LOGCAT_MCP_BUFFER` | 40000 | Ring-buffer size for `capture_start` |
+| `FLUTTER_BRIDGE_MAX_LINES` | 200 | Hard cap on returned lines |
+| `FLUTTER_BRIDGE_MAX_MSG` | 400 | Per-message truncation |
+| `FLUTTER_BRIDGE_SCAN_LINES` | 8000 | Lines pulled from logcat before filtering |
+| `FLUTTER_BRIDGE_BUFFER` | 40000 | Ring-buffer size for `capture_start` |
+| `FLUTTER_BRIDGE_TIMEOUT` | 30 | Seconds to wait on a Dart VM Service call |
+| `FLUTTER_PATH` | `flutter` on PATH | flutter binary, for `flutter_attach` |
 | `R8_JAR` | — | Path to `r8.jar` if `retrace` is not on PATH |
+
+## License
+
+MIT — see [LICENSE](LICENSE).

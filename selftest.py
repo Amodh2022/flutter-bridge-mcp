@@ -13,7 +13,7 @@ import argparse
 import sys
 import time
 
-import server as s
+from flutter_bridge_mcp import server as s
 
 PASS, FAIL, SKIP = "  PASS", "  FAIL", "  SKIP"
 results: list[tuple[str, str, str]] = []

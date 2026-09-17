@@ -40,10 +40,10 @@ from PIL import Image as PILImage, ImageChops, ImageDraw
 
 ADB = os.environ.get("ADB_PATH") or shutil.which("adb") or "adb"
 DEFAULT_SERIAL = os.environ.get("ANDROID_SERIAL")
-MAX_LINES = int(os.environ.get("LOGCAT_MCP_MAX_LINES", "200"))
-MAX_MSG = int(os.environ.get("LOGCAT_MCP_MAX_MSG", "400"))
-SCAN_LINES = int(os.environ.get("LOGCAT_MCP_SCAN_LINES", "8000"))
-BUFFER_SIZE = int(os.environ.get("LOGCAT_MCP_BUFFER", "40000"))
+MAX_LINES = int(os.environ.get("FLUTTER_BRIDGE_MAX_LINES", "200"))
+MAX_MSG = int(os.environ.get("FLUTTER_BRIDGE_MAX_MSG", "400"))
+SCAN_LINES = int(os.environ.get("FLUTTER_BRIDGE_SCAN_LINES", "8000"))
+BUFFER_SIZE = int(os.environ.get("FLUTTER_BRIDGE_BUFFER", "40000"))
 R8_JAR = os.environ.get("R8_JAR")
 
 mcp = MCPServer(
@@ -194,7 +194,7 @@ def read_logs(
         tag: regex matched against the log tag.
         min_level: one of V, D, I, W, E, F. Defaults to I.
         contains: case-insensitive substring that must appear in tag or message.
-        limit: max lines returned (hard-capped by LOGCAT_MCP_MAX_LINES).
+        limit: max lines returned (hard-capped by FLUTTER_BRIDGE_MAX_LINES).
         buffer: main, system, crash, events, radio, or all.
         serial: device serial when several are attached.
     """
@@ -750,7 +750,7 @@ def device_info(serial: Optional[str] = None) -> str:
 # and source locations come from the Dart VM Service.
 
 VM_URI_RE = re.compile(r"Dart VM service is listening on (http://127\.0\.0\.1:(\d+)/(\S*))")
-FLUTTER_TIMEOUT = int(os.environ.get("FLUTTER_MCP_TIMEOUT", "30"))
+FLUTTER_TIMEOUT = int(os.environ.get("FLUTTER_BRIDGE_TIMEOUT", "30"))
 
 
 class _VMService:
@@ -858,8 +858,14 @@ def _widget_nodes(package: Optional[str], serial: Optional[str],
          "fullDetails": "true"},
         package, serial,
     )
-    root = res.get("result") or {}
+    return _flatten_widget_tree(res.get("result") or {}, local_only)
 
+
+def _flatten_widget_tree(root: dict, local_only: bool = True) -> list[dict]:
+    """Depth-first flatten of an inspector tree into flat, renderable rows.
+
+    Split out from the RPC call so it can be tested against a recorded response.
+    """
     out: list[dict] = []
 
     def walk(n: dict, depth: int) -> None:
@@ -998,6 +1004,56 @@ def flutter_locate(text: str, package: Optional[str] = None,
     return "\n".join(out)
 
 
+def _dart_error_blocks(entries: list[dict]) -> list[dict]:
+    """Group `flutter` log lines into whole errors.
+
+    Flutter prints one error as many consecutive lines fenced by box drawing, each
+    arriving as its own logcat entry, so the fence has to be tracked as state. A block
+    left unterminated at the end of the buffer is still returned — a truncated error is
+    more useful than a dropped one.
+    """
+    blocks: list[dict] = []
+    block: Optional[dict] = None
+    for e in entries:
+        if e["tag"] != "flutter":
+            continue
+        blob = e["msg"]
+        if "╔" in blob or "EXCEPTION CAUGHT" in blob:
+            if block:
+                blocks.append(block)
+            block = {"ts": e["ts"], "msg": blob}
+        elif block is not None:
+            block["msg"] += "\n" + blob
+            if "╚" in blob:
+                blocks.append(block)
+                block = None
+        elif "Unhandled" in blob or "Error:" in blob or "Exception" in blob:
+            blocks.append({"ts": e["ts"], "msg": blob})
+    if block:
+        blocks.append(block)
+    return blocks
+
+
+def _native_errors(entries: list[dict], app_pids: set[str],
+                   package: Optional[str]) -> list[dict]:
+    """Native E/F lines belonging to the app.
+
+    Matched on pid: a Java trace rarely mentions the application id it came from.
+    """
+    out = []
+    for e in entries:
+        if e["tag"] == "flutter" or e["level"] not in ("E", "F"):
+            continue
+        if not app_pids or e["pid"] in app_pids or (package and package in e["msg"]):
+            out.append(e)
+    return out
+
+
+def _split_errors(entries: list[dict], app_pids: set[str],
+                  package: Optional[str]) -> tuple[list[dict], list[dict]]:
+    return _dart_error_blocks(entries), _native_errors(entries, app_pids, package)
+
+
 @mcp.tool()
 def flutter_diagnose(package: Optional[str] = None, limit: int = 5,
                      serial: Optional[str] = None) -> str:
@@ -1022,33 +1078,7 @@ def flutter_diagnose(package: Optional[str] = None, limit: int = 5,
         except RuntimeError:
             pass
 
-    # A Flutter error is many consecutive `flutter` lines fenced by box drawing,
-    # so collect whole blocks rather than the individual lines.
-    dart, native = [], []
-    block: Optional[dict] = None
-    for e in entries:
-        blob = e["msg"]
-        if e["tag"] == "flutter":
-            if "╔" in blob or "EXCEPTION CAUGHT" in blob:
-                if block:
-                    dart.append(block)
-                block = {"ts": e["ts"], "msg": blob}
-                continue
-            if block is not None:
-                block["msg"] += "\n" + blob
-                if "╚" in blob:
-                    dart.append(block)
-                    block = None
-                continue
-            if "Unhandled" in blob or "Error:" in blob or "Exception" in blob:
-                dart.append({"ts": e["ts"], "msg": blob})
-        elif e["level"] in ("E", "F") and e["tag"] != "flutter":
-            # Match on pid: the app's own name rarely appears in a native trace.
-            if not app_pids or e["pid"] in app_pids or package and package in blob:
-                native.append(e)
-
-    if block:
-        dart.append(block)
+    dart, native = _split_errors(entries, app_pids, package)
     if not dart and not native:
         return ("No Dart or native errors in the log buffer. Call clear_logs, "
                 "reproduce the problem, then run this again.")

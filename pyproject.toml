@@ -2,20 +2,51 @@
 name = "flutter-bridge-mcp"
 version = "0.1.0"
 description = "MCP server that joins Android's view of a running Flutter app to Dart's — screen coordinates, widget tree and source locations in one place"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [{ name = "Amodh Nadiger" }]
+keywords = ["mcp", "android", "flutter", "adb", "logcat", "devtools", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = [
     "mcp>=2,<3",
     "pillow>=10,<12",
     "websockets>=12,<16",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/amodhnadiger/flutter-bridge-mcp"
+Repository = "https://github.com/amodhnadiger/flutter-bridge-mcp"
+Issues = "https://github.com/amodhnadiger/flutter-bridge-mcp/issues"
+
 [project.scripts]
-flutter-bridge-mcp = "server:main"
+flutter-bridge-mcp = "flutter_bridge_mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["server.py"]
-sources = ["."]
+packages = ["flutter_bridge_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = ["flutter_bridge_mcp", "tests", "selftest.py", "README.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+# Lets the suite run straight from a clone, without an editable install first.
+pythonpath = ["."]
+testpaths = ["tests"]
