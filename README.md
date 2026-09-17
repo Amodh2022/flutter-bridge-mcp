@@ -1,0 +1,129 @@
+# logcat-mcp
+
+An MCP server that reads and filters Android logcat over ADB. Everything is
+filtered, tailed, de-duplicated and truncated server-side so responses stay small.
+
+## Tools
+
+### Reading logs
+
+| Tool | Purpose |
+| --- | --- |
+| `list_devices` | Connected devices/emulators |
+| `read_logs` | Recent logcat, filtered by package / tag / level / substring |
+| `find_crashes` | Whole stack traces from the crash buffer |
+| `clear_logs` | Wipe buffers before reproducing a bug |
+| `capture_start` / `capture_read` / `capture_stop` | Background ring-buffer capture |
+| `retrace` | De-obfuscate an R8/ProGuard trace with `mapping.txt` |
+
+### Driving the device
+
+| Tool | Purpose |
+| --- | --- |
+| `screenshot` | See the screen (downscaled before sending) |
+| `ui_dump` | List on-screen elements with tap coordinates |
+| `tap` | Tap by element text, or by coordinate |
+| `swipe` | Scroll or drag, by direction or coordinates |
+| `input_text` | Type into the focused field, optionally clearing or submitting |
+| `press_key` | back, home, recents, enter, dpad, volume, power… |
+| `launch_app` / `stop_app` | Cold starts, and `clear_data` for first-run tests |
+| `device_info` | Screen size, density, Android version, foreground activity |
+
+### Flutter ↔ Android bridge
+
+Android tooling sees a Flutter app as one opaque `SurfaceView`; Dart tooling sees
+widgets but knows nothing about logcat, ANRs or native crashes. These join the two.
+
+| Tool | Purpose |
+| --- | --- |
+| `flutter_connect` | Attach to the running app's Dart VM Service |
+| `flutter_widget_tree` | Live widget tree, each widget tagged with its source file and line |
+| `flutter_locate` | **The bridge** — tap coordinates *and* the code that built the widget |
+| `flutter_diagnose` | Dart exceptions correlated with the native errors around them |
+| `flutter_hot_reload` | Reload after editing Dart (needs `flutter run`/`attach`) |
+
+| `flutter_attach` | Attach the Flutter tool so hot reload works |
+| `flutter_hot_reload` | Apply Dart edits to the running app |
+| `flutter_detach` | End the attach session, leaving the app running |
+
+### The loop
+
+The point of the bridge is this cycle, which no other Android or Flutter MCP closes:
+
+```
+screenshot          see the bug
+flutter_locate      -> "Total Patients" at (410,269), built by
+                       lib/presentation/dashboard/widgets/dashboard_grid.dart:76
+ui_checkpoint       remember the screen
+<edit that line>
+flutter_hot_reload  apply it
+ui_diff             confirm exactly what changed, and nothing else
+```
+
+`ui_diff` reports the percentage of pixels that changed, clusters them into regions,
+and returns the screen with those regions outlined — so "did my fix land, and did it
+disturb anything else?" is answered rather than eyeballed.
+
+| Tool | Purpose |
+| --- | --- |
+| `ui_checkpoint` | Remember the current screen |
+| `ui_diff` | Compare now against a checkpoint, outlining what moved |
+
+Requires a **debug or profile build**. The VM Service URI is printed to logcat only at
+launch, so if it has scrolled away use `flutter_connect(package=..., relaunch=True)`.
+
+Prefer `ui_dump` and `tap(text=...)` over screenshots and raw coordinates: it is far
+cheaper, and it does not break when the layout or resolution changes. Screenshots are
+downscaled, so coordinates read off one are *not* device coordinates.
+
+There is deliberately no arbitrary `adb shell` tool.
+
+## Install (local)
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e .
+```
+
+This puts a `logcat-mcp` executable in `.venv/bin/`.
+
+## Use in Claude Code (including the Claude plugin in Android Studio)
+
+The Studio plugin reads the Claude Code CLI config, so registering it once covers both:
+
+```bash
+claude mcp add logcat /abs/path/to/androidSt_mcp/.venv/bin/logcat-mcp \
+  -e ADB_PATH=/abs/path/to/Android/Sdk/platform-tools/adb
+```
+
+## Use with Gemini in Android Studio
+
+Create `mcp.json` in the Studio config directory
+(`~/.config/Google/AndroidStudio<version>/mcp.json` on Linux,
+`~/Library/Application Support/Google/AndroidStudio<version>/` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "logcat": {
+      "command": "/abs/path/to/androidSt_mcp/.venv/bin/logcat-mcp",
+      "args": [],
+      "env": { "ADB_PATH": "/abs/path/to/Android/Sdk/platform-tools/adb" }
+    }
+  }
+}
+```
+
+Restart Studio, then in Gemini → **Agent** mode check the tools menu for `logcat`.
+
+## Configuration
+
+| Env var | Default | Meaning |
+| --- | --- | --- |
+| `ADB_PATH` | `adb` on PATH | adb binary |
+| `ANDROID_SERIAL` | — | Default device when several are attached |
+| `LOGCAT_MCP_MAX_LINES` | 200 | Hard cap on returned lines |
+| `LOGCAT_MCP_MAX_MSG` | 400 | Per-message truncation |
+| `LOGCAT_MCP_SCAN_LINES` | 8000 | Lines pulled from logcat before filtering |
+| `LOGCAT_MCP_BUFFER` | 40000 | Ring-buffer size for `capture_start` |
+| `R8_JAR` | — | Path to `r8.jar` if `retrace` is not on PATH |
