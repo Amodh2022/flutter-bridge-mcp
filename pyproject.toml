@@ -1,6 +1,6 @@
 [project]
 name = "flutter-bridge-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server that joins Android's view of a running Flutter app to Dart's — screen coordinates, widget tree and source locations in one place"
 readme = "README.md"
 license = "MIT"
