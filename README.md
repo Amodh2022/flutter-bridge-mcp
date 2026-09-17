@@ -83,20 +83,38 @@ There is deliberately no arbitrary `adb shell` tool.
 
 ## Install
 
+It needs Python 3.10+ and `adb` — from Android Studio's SDK, or `platform-tools`.
+
 ```bash
-pip install flutter-bridge-mcp
+pipx install flutter-bridge-mcp
 ```
 
-Or from a clone, to hack on it:
+[pipx](https://pipx.pypa.io) puts the server in its own virtualenv and the
+`flutter-bridge-mcp` executable on your PATH, which is what the MCP configs below
+expect. On Debian/Ubuntu, `sudo apt install pipx && pipx ensurepath` first.
+
+A plain `pip install` works too, but on Debian, Ubuntu and recent Fedora it fails
+with `error: externally-managed-environment` — those distros forbid pip from writing
+into the system Python ([PEP 668](https://peps.python.org/pep-0668/)). Use pipx, or a
+virtualenv of your own:
+
+```bash
+python3 -m venv ~/.venvs/flutter-bridge
+~/.venvs/flutter-bridge/bin/pip install flutter-bridge-mcp
+```
+
+Then point your MCP config at `~/.venvs/flutter-bridge/bin/flutter-bridge-mcp`
+rather than the bare command. Do not reach for `--break-system-packages`; it writes
+into the Python your package manager owns.
+
+From a clone, to hack on it:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-Either way you get a `flutter-bridge-mcp` executable on the path (in `.venv/bin/`
-for the editable install). It needs Python 3.10+ and `adb` — from Android Studio's
-SDK, or `platform-tools`.
+The executable is then `.venv/bin/flutter-bridge-mcp`.
 
 ## Tests
 
@@ -104,15 +122,16 @@ The unit suite covers log parsing, error grouping and widget-tree flattening, an
 needs no device:
 
 ```bash
-pip install -e ".[test]"
-python -m pytest
+python3 -m venv .venv
+.venv/bin/pip install -e ".[test]"
+.venv/bin/python -m pytest
 ```
 
 `selftest.py` is the other half — it exercises the real thing against an attached
 device:
 
 ```bash
-python selftest.py --package com.example.app --project ~/StudioProjects/app
+.venv/bin/python selftest.py --package com.example.app --project ~/StudioProjects/app
 ```
 
 Without `--package` it checks the Android side only; `--project` adds hot reload.
@@ -125,6 +144,9 @@ The Studio plugin reads the Claude Code CLI config, so registering it once cover
 claude mcp add flutter-bridge flutter-bridge-mcp \
   -e ADB_PATH=/abs/path/to/Android/Sdk/platform-tools/adb
 ```
+
+If you installed into a virtualenv rather than with pipx, use that venv's absolute
+path in place of the bare `flutter-bridge-mcp`.
 
 ## Use with Gemini in Android Studio
 
