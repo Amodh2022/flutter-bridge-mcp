@@ -1,7 +1,12 @@
-# logcat-mcp
+# flutter-bridge-mcp
 
-An MCP server that reads and filters Android logcat over ADB. Everything is
-filtered, tailed, de-duplicated and truncated server-side so responses stay small.
+**Your Android tools see a Flutter app as one opaque rectangle. This makes that
+rectangle readable.** Point at wrong-looking text on screen and get back the file and
+line that built it, edit it, hot reload, then diff the pixels to prove only that
+changed.
+
+It also does the Android basics — logcat, crashes, taps, screenshots — filtered and
+truncated server-side so a response can never blow up the model's context.
 
 ## Tools
 
@@ -40,8 +45,6 @@ widgets but knows nothing about logcat, ANRs or native crashes. These join the t
 | `flutter_widget_tree` | Live widget tree, each widget tagged with its source file and line |
 | `flutter_locate` | **The bridge** — tap coordinates *and* the code that built the widget |
 | `flutter_diagnose` | Dart exceptions correlated with the native errors around them |
-| `flutter_hot_reload` | Reload after editing Dart (needs `flutter run`/`attach`) |
-
 | `flutter_attach` | Attach the Flutter tool so hot reload works |
 | `flutter_hot_reload` | Apply Dart edits to the running app |
 | `flutter_detach` | End the attach session, leaving the app running |
@@ -85,14 +88,14 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-This puts a `logcat-mcp` executable in `.venv/bin/`.
+This puts a `flutter-bridge-mcp` executable in `.venv/bin/`.
 
 ## Use in Claude Code (including the Claude plugin in Android Studio)
 
 The Studio plugin reads the Claude Code CLI config, so registering it once covers both:
 
 ```bash
-claude mcp add logcat /abs/path/to/androidSt_mcp/.venv/bin/logcat-mcp \
+claude mcp add flutter-bridge /abs/path/to/flutter-bridge-mcp/.venv/bin/flutter-bridge-mcp \
   -e ADB_PATH=/abs/path/to/Android/Sdk/platform-tools/adb
 ```
 
@@ -105,8 +108,8 @@ Create `mcp.json` in the Studio config directory
 ```json
 {
   "mcpServers": {
-    "logcat": {
-      "command": "/abs/path/to/androidSt_mcp/.venv/bin/logcat-mcp",
+    "flutter-bridge": {
+      "command": "/abs/path/to/flutter-bridge-mcp/.venv/bin/flutter-bridge-mcp",
       "args": [],
       "env": { "ADB_PATH": "/abs/path/to/Android/Sdk/platform-tools/adb" }
     }
@@ -114,7 +117,7 @@ Create `mcp.json` in the Studio config directory
 }
 ```
 
-Restart Studio, then in Gemini → **Agent** mode check the tools menu for `logcat`.
+Restart Studio, then in Gemini → **Agent** mode check the tools menu for `flutter-bridge`.
 
 ## Configuration
 
