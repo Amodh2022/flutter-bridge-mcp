@@ -51,7 +51,7 @@ widgets but knows nothing about logcat, ANRs or native crashes. These join the t
 
 ### The loop
 
-The point of the bridge is this cycle, which no other Android or Flutter MCP closes:
+The point of the bridge is this cycle:
 
 ```
 screenshot          see the bug
@@ -80,6 +80,10 @@ cheaper, and it does not break when the layout or resolution changes. Screenshot
 downscaled, so coordinates read off one are *not* device coordinates.
 
 There is deliberately no arbitrary `adb shell` tool.
+
+For how the join works, how the VM Service is discovered without adding a
+package to your app, and how this compares to the other Flutter and Android MCP
+servers, see [design.md](design.md).
 
 ## Install
 
